@@ -53,6 +53,9 @@ Route::middleware('throttle:api')->group(function () {
         // AI assistant: 20 requests/minute per user plus a daily token budget.
         Route::post('/chat', [ChatController::class, 'send'])->middleware('throttle:chat');
 
+        // Clear only this user's chat transcript/context for one session.
+        Route::delete('/chat/session', [ChatController::class, 'clearSession'])->middleware('throttle:chat');
+
         // News write access (editor or admin) — least privilege via token abilities.
         Route::middleware('role:editor,admin')->group(function () {
             Route::post('/news', [NewsController::class, 'store'])->middleware('ability:news:write');

@@ -6,9 +6,11 @@ namespace Tests\Feature;
 
 use App\Models\News;
 use App\Models\User;
+use App\Services\AssistantIntentDetector;
 use App\Services\GeminiClient;
 use App\Services\GeminiClientException;
 use App\Services\ChatContextBuilder;
+use App\Services\SystemDataService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
@@ -53,13 +55,35 @@ final class ChatContextTest extends TestCase
             'published_at' => now()->subDay(),
         ]);
 
-        $prompt = (new ChatContextBuilder())->systemPrompt($reader, 'cleanup');
+        $intents = [AssistantIntentDetector::ADVISORY];
+        $data = app(SystemDataService::class)->retrieve($reader, $intents);
+        $prompt = (new ChatContextBuilder())->systemPrompt(
+            $reader,
+            'cleanup',
+            $intents,
+            app(SystemDataService::class)->promptContext($data)
+        );
 
         $this->assertStringContainsString('Public advisory about cleanup', $prompt);
         $this->assertStringNotContainsString('Secret draft about roads', $prompt);
         $this->assertStringNotContainsString('Residents only bulletin', $prompt);
         $this->assertStringNotContainsString($reader->email, $prompt);
         $this->assertStringContainsString('not an administrator', $prompt);
+    }
+
+    public function test_system_prompt_declares_the_scoped_role_and_exact_refusal(): void
+    {
+        $prompt = (new ChatContextBuilder())->systemPrompt(
+            $this->user('reader', 'reader@example.com'),
+            'How do I sign in?'
+        );
+
+        self::assertStringContainsString('Bantay Cordova System Assistant', $prompt);
+        self::assertStringContainsString(ChatContextBuilder::REFUSAL_REPLY, $prompt);
+        self::assertStringContainsString('NOT a general-purpose chatbot', $prompt);
+        self::assertStringContainsString('untrusted data', $prompt);
+        self::assertStringContainsString('Never invent features', $prompt);
+        self::assertStringContainsString('no incident-reporting, incident-monitoring', $prompt);
     }
 
     public function test_provider_failure_returns_friendly_reply_and_stores_only_masked_text(): void
@@ -73,7 +97,7 @@ final class ChatContextTest extends TestCase
         Sanctum::actingAs($user, ['news:read']);
 
         $this->postJson('/api/chat', [
-            'message' => 'Please email juan@example.com about this',
+            'message' => 'Please email juan@example.com about my account',
             'session_id' => 'test-session',
         ])->assertStatus(503)->assertJsonPath(
             'reply',
@@ -82,12 +106,12 @@ final class ChatContextTest extends TestCase
 
         $this->assertDatabaseHas('chat_messages', [
             'user_id' => $user->id,
-            'content' => 'Please email [email] about this',
+            'content' => 'Please email [email] about my account',
             'flagged' => 1,
             'failed' => 1,
         ]);
         $this->assertDatabaseMissing('chat_messages', [
-            'content' => 'Please email juan@example.com about this',
+            'content' => 'Please email juan@example.com about my account',
         ]);
         $this->assertDatabaseHas('audit_logs', ['action' => 'ai.chat.flagged']);
     }

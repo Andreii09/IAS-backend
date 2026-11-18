@@ -4,21 +4,29 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * Google Gemini client.
+ * Google Gemini client with availability controls.
  *
- * The chat controller keeps sending the same provider-neutral payload it used
- * with the previous provider. This client translates it to Gemini's native
- * generateContent format and normalises the response back to the shape the
- * controller and AI-usage dashboard already understand.
+ * The chat controller keeps sending a provider-neutral payload. This client
+ * translates it to Gemini's native generateContent format and normalises the
+ * response. Transient failures get one retry; repeated failures briefly open
+ * a cache-backed circuit so the widget degrades to offline help instead of
+ * hammering the provider.
  */
 class GeminiClient
 {
     private const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent';
+
+    private const FAILURES_KEY = 'ai:gemini:failures';
+
+    private const OPEN_KEY = 'ai:gemini:circuit-open';
+
+    private const TRANSIENT_STATUSES = [408, 425, 429, 500, 502, 503, 504];
 
     /**
      * @param  array<string, mixed>  $payload
@@ -42,50 +50,121 @@ class GeminiClient
             throw new GeminiClientException('The Gemini request has no messages.');
         }
 
-        $system = $payload['system'] ?? '';
-        $maxOutputTokens = max(1, (int) ($payload['max_tokens'] ?? 600));
+        $this->assertCircuitClosed();
 
         $body = [
             'systemInstruction' => [
                 'parts' => [
-                    ['text' => is_string($system) ? $system : ''],
+                    ['text' => is_string($payload['system'] ?? null) ? (string) $payload['system'] : ''],
                 ],
             ],
             'contents' => $contents,
             'generationConfig' => [
-                'maxOutputTokens' => $maxOutputTokens,
+                'maxOutputTokens' => max(1, (int) ($payload['max_tokens'] ?? 600)),
                 'temperature' => 0.4,
             ],
         ];
 
         $url = sprintf(self::ENDPOINT, rawurlencode($model));
+        $retries = max(0, (int) config('ai.retry.attempts', 1));
+        $delayMs = max(0, (int) config('ai.retry.delay_ms', 350));
+        $lastError = null;
 
-        try {
-            $response = Http::withHeaders([
-                'x-goog-api-key' => trim($key),
-                'content-type' => 'application/json',
-                'accept' => 'application/json',
-            ])->timeout(30)->post($url, $body);
-        } catch (Throwable $e) {
-            // Log metadata only - never headers, payload or the key itself.
-            Log::warning('Gemini transport failure', ['exception' => get_class($e)]);
+        for ($attempt = 1; $attempt <= $retries + 1; $attempt++) {
+            try {
+                $response = Http::withHeaders([
+                    'x-goog-api-key' => trim($key),
+                    'content-type' => 'application/json',
+                    'accept' => 'application/json',
+                ])->timeout(30)->post($url, $body);
 
-            throw new GeminiClientException('The Gemini service could not be reached.', 0, $e);
+                if ($response->failed()) {
+                    $status = $response->status();
+                    // Log metadata only - never headers, payload, key or prompt text.
+                    Log::warning('Gemini request failed', ['status' => $status, 'attempt' => $attempt]);
+
+                    $lastError = new GeminiClientException(
+                        'The Gemini service returned status '.$status.'.',
+                        $status
+                    );
+                } else {
+                    $data = $response->json();
+
+                    if (! is_array($data)) {
+                        throw new GeminiClientException('The Gemini service returned an invalid response.', 500);
+                    }
+
+                    $this->clearCircuitFailures();
+
+                    $result = $this->normalise($data, $model);
+                    $result['attempts'] = $attempt;
+
+                    return $result;
+                }
+            } catch (GeminiClientException $e) {
+                $lastError = $e;
+            } catch (Throwable $e) {
+                // Treat network/transport problems as transient (503).
+                Log::warning('Gemini transport failure', ['exception' => get_class($e), 'attempt' => $attempt]);
+
+                $lastError = new GeminiClientException('The Gemini service could not be reached.', 503, $e);
+            }
+
+            if (! $this->isTransient($lastError) || $attempt > $retries) {
+                break;
+            }
+
+            if ($delayMs > 0) {
+                usleep($delayMs * 1000);
+            }
         }
 
-        if ($response->failed()) {
-            Log::warning('Gemini request failed', ['status' => $response->status()]);
+        $this->recordCircuitFailure();
 
-            throw new GeminiClientException('The Gemini service returned status '.$response->status().'.');
+        throw $lastError ?? new GeminiClientException('The Gemini service is unavailable.', 503);
+    }
+
+    private function assertCircuitClosed(): void
+    {
+        if (! (bool) config('ai.circuit_breaker.enabled', true)) {
+            return;
         }
 
-        $data = $response->json();
+        if ((bool) Cache::get(self::OPEN_KEY, false)) {
+            throw new GeminiClientException(
+                'The Gemini circuit breaker is open.',
+                GeminiClientException::CIRCUIT_OPEN
+            );
+        }
+    }
 
-        if (! is_array($data)) {
-            throw new GeminiClientException('The Gemini service returned an invalid response.');
+    private function recordCircuitFailure(): void
+    {
+        if (! (bool) config('ai.circuit_breaker.enabled', true)) {
+            return;
         }
 
-        return $this->normalise($data, $model);
+        $threshold = max(1, (int) config('ai.circuit_breaker.threshold', 3));
+        $ttl = max(1, (int) config('ai.circuit_breaker.ttl_seconds', 60));
+        $failures = (int) Cache::get(self::FAILURES_KEY, 0) + 1;
+
+        Cache::put(self::FAILURES_KEY, $failures, $ttl);
+
+        if ($failures >= $threshold) {
+            Cache::put(self::OPEN_KEY, true, $ttl);
+            Log::warning('Gemini circuit breaker opened', ['failures' => $failures]);
+        }
+    }
+
+    private function clearCircuitFailures(): void
+    {
+        Cache::forget(self::FAILURES_KEY);
+        Cache::forget(self::OPEN_KEY);
+    }
+
+    private function isTransient(GeminiClientException $error): bool
+    {
+        return in_array($error->getCode(), self::TRANSIENT_STATUSES, true);
     }
 
     /**
