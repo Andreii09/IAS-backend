@@ -36,7 +36,7 @@ You need:
    | `GEMINI_API_KEY` | your free key |
    | `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | seeded admin credentials |
 
-   If you use Postgres, also change `DB_CONNECTION` from `mysql` to `pgsql`.
+   The blueprint defaults `DB_CONNECTION` to `pgsql` (Render has no free MySQL). Change it to `mysql` only if your `DATABASE_URL` points at MySQL/MariaDB.
 
    `SESSION_DOMAIN` and `SANCTUM_STATEFUL_DOMAINS` use **bare hostnames** — no `https://` and no port. Multiple hostnames can be comma-separated.
 

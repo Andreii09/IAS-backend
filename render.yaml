@@ -20,9 +20,11 @@ services:
       # Generated once by Render; copy the same value anywhere else you deploy.
       - key: APP_KEY
         generateValue: true
+      # Postgres is the default because Render has no free MySQL. Change to
+      # mysql only if your DATABASE_URL points at MySQL/MariaDB.
       - key: DB_CONNECTION
-        value: mysql
-      # External MySQL/Postgres URL, e.g. mysql://user:pass@host:3306/db
+        value: pgsql
+      # External Postgres URL, e.g. postgresql://user:pass@host:5432/db?sslmode=require
       - key: DATABASE_URL
         sync: false
       - key: CACHE_STORE
