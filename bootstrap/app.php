@@ -21,6 +21,16 @@ return Application::configure(basePath: dirname(__DIR__))
         // Allow the Vite dev server to use Sanctum's stateful SPA cookies.
         $middleware->statefulApi();
 
+        // The frontend Nginx proxy sends the backend Host upstream so Render
+        // routes correctly, and the browser's host in X-Forwarded-Host.
+        $middleware->trustProxies(
+            at: '*',
+            headers: Request::HEADER_X_FORWARDED_FOR
+                | Request::HEADER_X_FORWARDED_HOST
+                | Request::HEADER_X_FORWARDED_PORT
+                | Request::HEADER_X_FORWARDED_PROTO,
+        );
+
         // Laravel does not enable API throttling by default.
         $middleware->api(append: [ThrottleRequests::class.':api']);
 
