@@ -17,6 +17,7 @@ RUN apk add --no-cache \
         pdo_pgsql \
         bcmath \
         intl \
+        mbstring \
         zip \
         opcache
 
