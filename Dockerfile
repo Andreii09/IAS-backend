@@ -11,7 +11,8 @@ RUN apk add --no-cache \
         unzip \
         libzip-dev \
         icu-dev \
-        postgresql-dev \
+        libpq-dev \
+        oniguruma-dev \
     && docker-php-ext-install \
         pdo_mysql \
         pdo_pgsql \
