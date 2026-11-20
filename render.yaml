@@ -1,0 +1,53 @@
+services:
+  - type: web
+    name: bantay-cordova-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_NAME
+        value: Bantay Cordova
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      # Set these to the public FRONTEND origin (no trailing slash).
+      - key: APP_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      # Generated once by Render; copy the same value anywhere else you deploy.
+      - key: APP_KEY
+        generateValue: true
+      - key: DB_CONNECTION
+        value: mysql
+      # External MySQL/Postgres URL, e.g. mysql://user:pass@host:3306/db
+      - key: DATABASE_URL
+        sync: false
+      - key: CACHE_STORE
+        value: file
+      - key: SESSION_DRIVER
+        value: file
+      - key: SESSION_DOMAIN
+        sync: false
+      - key: SANCTUM_STATEFUL_DOMAINS
+        sync: false
+      - key: SESSION_SECURE_COOKIE
+        value: true
+      - key: QUEUE_CONNECTION
+        value: database
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
+      - key: ADMIN_NAME
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: RUN_MIGRATIONS
+        value: true
+      - key: RUN_SEED
+        value: false
