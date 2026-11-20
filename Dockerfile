@@ -28,12 +28,8 @@ WORKDIR /var/www/html
 
 COPY . .
 
-RUN composer install \
-        --no-dev \
-        --no-interaction \
-        --prefer-dist \
-        --optimize-autoloader \
-    && mkdir -p \
+# Laravel's post-autoload-dump boots artisan, so writable dirs must exist first.
+RUN mkdir -p \
         storage/app/public \
         storage/framework/cache/data \
         storage/framework/sessions \
@@ -42,6 +38,14 @@ RUN composer install \
         storage/logs \
         bootstrap/cache \
     && chown -R www-data:www-data storage bootstrap/cache
+
+ENV COMPOSER_ALLOW_SUPERUSER=1
+
+RUN composer install \
+        --no-dev \
+        --no-interaction \
+        --prefer-dist \
+        --optimize-autoloader
 
 COPY docker/nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY docker/supervisord.conf /etc/supervisord.conf
