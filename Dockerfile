@@ -37,7 +37,8 @@ RUN mkdir -p \
         storage/framework/testing \
         storage/logs \
         bootstrap/cache \
-    && chown -R www-data:www-data storage bootstrap/cache
+        resources/views \
+    && chown -R www-data:www-data storage bootstrap/cache resources
 
 ENV COMPOSER_ALLOW_SUPERUSER=1
 
