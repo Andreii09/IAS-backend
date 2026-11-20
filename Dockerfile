@@ -1,7 +1,7 @@
 # Bantay Cordova API — Laravel 12 + PHP-FPM + Nginx + Supervisor
 # Build:  docker build -t bantay-cordova-api .
 # Run:    docker run --env-file .env -p 8000:80 bantay-cordova-api
-FROM php:8.3-fpm-alpine
+FROM php:8.4-fpm-alpine
 
 RUN apk add --no-cache \
         nginx \

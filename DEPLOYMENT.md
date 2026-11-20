@@ -6,7 +6,7 @@ Frontend deployment files are in the separate repo: `https://github.com/Andreii0
 
 ## What is included
 
-- `Dockerfile` — PHP 8.3-FPM, Nginx, Supervisor, queue worker and scheduler
+- `Dockerfile` — PHP 8.4-FPM, Nginx, Supervisor, queue worker and scheduler
 - `docker/nginx.conf.template` — serves `public/` and forwards PHP to FPM
 - `docker/entrypoint.sh` — renders the Nginx config, runs migrations (opt-in), caches Laravel config, starts Supervisor
 - `render.yaml` — Render blueprint for the web service
