@@ -28,6 +28,7 @@ You need:
 
    | Key | Value |
    |---|---|
+   | `APP_KEY` | output of `php artisan key:generate --show` — must start with `base64:` |
    | `APP_URL` | `https://<your-frontend-host>` |
    | `FRONTEND_URL` | `https://<your-frontend-host>` |
    | `DATABASE_URL` | `mysql://user:pass@host:3306/bantay_cordova` (or `postgres://…`) |
@@ -35,6 +36,8 @@ You need:
    | `SANCTUM_STATEFUL_DOMAINS` | `<your-frontend-host>` |
    | `GEMINI_API_KEY` | your free key |
    | `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | seeded admin credentials |
+
+   Do not use Render's `generateValue` output directly for `APP_KEY`: it is base64 text without Laravel's required `base64:` prefix. Generate the key with `php artisan key:generate --show` and copy the full value.
 
    The blueprint defaults `DB_CONNECTION` to `pgsql` (Render has no free MySQL). Change it to `mysql` only if your `DATABASE_URL` points at MySQL/MariaDB.
 

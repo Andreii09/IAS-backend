@@ -21,9 +21,10 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false
-      # Generated once by Render; copy the same value anywhere else you deploy.
+      # Laravel needs a key from `php artisan key:generate --show`, including
+      # the `base64:` prefix. Render's generateValue omits that prefix.
       - key: APP_KEY
-        generateValue: true
+        sync: false
       # Postgres is the default because Render has no free MySQL. Change to
       # mysql only if your DATABASE_URL points at MySQL/MariaDB.
       - key: DB_CONNECTION
