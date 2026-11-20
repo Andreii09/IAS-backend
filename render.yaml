@@ -12,6 +12,10 @@ services:
         value: production
       - key: APP_DEBUG
         value: false
+      # Stream Laravel errors to stdout so they appear in Render's free
+      # Application Logs (the Shell tab requires a paid plan).
+      - key: LOG_CHANNEL
+        value: stderr
       # Set these to the public FRONTEND origin (no trailing slash).
       - key: APP_URL
         sync: false
